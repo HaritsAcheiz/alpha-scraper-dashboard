@@ -60,11 +60,18 @@ class DatabaseManager:
         return False, "❌ No database connection"
     
     def get_table_info(self, table_name: str) -> pd.DataFrame:
-        """Get column information from table"""
+        """Get column information, handling schema-qualified names (e.g., 'schema.table')"""
+        # Split schema and table if a dot exists
+        if "." in table_name:
+            schema, table = table_name.split(".", 1)
+        else:
+            schema, table = 'public', table_name
+
         query = f"""
             SELECT column_name, data_type 
             FROM information_schema.columns 
-            WHERE table_name = '{table_name}'
+            WHERE table_schema = '{schema.lower()}' 
+            AND table_name = '{table.lower()}'
             ORDER BY ordinal_position
         """
         return self.fetch_data(query)
