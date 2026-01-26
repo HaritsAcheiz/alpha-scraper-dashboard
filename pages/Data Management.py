@@ -41,7 +41,7 @@ with tab1:
             filtered_df = df
         
         st.info(f"Showing {len(filtered_df)} of {len(df)} records")
-        st.dataframe(filtered_df, use_container_width=True, height=400)
+        st.dataframe(filtered_df, width='stretch', height=400, hide_index=True)
 
 with tab2:
     st.subheader("➕ Add New Record")
