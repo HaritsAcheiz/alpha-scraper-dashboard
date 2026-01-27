@@ -4,3 +4,4 @@ uv.lock
 .venv/
 config.py
 __pycache__/
+secrets.toml

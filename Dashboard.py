@@ -1,29 +1,25 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from database.db_manager import DatabaseManager
 from utils.helpers import apply_custom_css
 import config
+from utils.init_db import get_manager
 
-# 1. Page Configuration
+# Page Configuration
 st.set_page_config(page_title="News Source Monitor", layout="wide")
 apply_custom_css()
 
-# Initialize Database Connection
-if "dashboard_db" not in st.session_state:
-    st.session_state.dashboard_db = DatabaseManager(config.DASHBOARD_DB_CONFIG)
-
-db_manager = st.session_state.dashboard_db
+db = get_manager("dashboard_db")
 
 st.markdown('<p class="main-header">News Source Status</p>', unsafe_allow_html=True)
 
-# 2. Data Loading from PostgreSQL
-df = db_manager.get_all_data(config.DASHBOARD_TABLE)
+# Data Loading from PostgreSQL
+df = db.fetch_data(f"SELECT * FROM {config.DASHBOARD_TABLE}")
 
 if df.empty:
     st.warning("No data found in the PostgreSQL table.")
 else:
-    # --- 1. KPI CARDS ---
+    # KPI CARDS
     st.subheader("Overview")
     col1, col2, col3, col4= st.columns(4)
 
@@ -44,7 +40,12 @@ else:
 
     with col4:
         # Latest Updated
-        latest_date = df['updated_at'].max()
+        if 'updated_at' in df.columns:
+            df['updated_at'] = pd.to_datetime(df['updated_at'])
+            latest_date = df['updated_at'].max()
+        else:
+            latest_date = None
+
         if pd.notna(latest_date):
             display_date = latest_date.strftime("%d/%m/%y %H:%M")
         else:
