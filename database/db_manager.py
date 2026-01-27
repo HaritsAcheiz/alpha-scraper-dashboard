@@ -1,93 +1,58 @@
-"""
-Database operations and connection management
-"""
 import streamlit as st
 import pandas as pd
-import psycopg2
-from typing import Tuple, Optional
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 
+# Global cache for engines - creates one pool per unique connection string
+@st.cache_resource
+def get_engine(connection_name: str) -> Engine:
+    """
+    Creates a connection pool for the specific database.
+    pool_pre_ping=True automatically handles lost connections.
+    """
+    try:
+        # Load config from secrets.toml
+        db_conf = st.secrets["connections"][connection_name]
+        
+        # Construct URL: postgresql+psycopg2://user:pass@host:port/dbname
+        url = f"{db_conf['dialect']}+psycopg2://{db_conf['username']}:{db_conf['password']}@{db_conf['host']}:{db_conf['port']}/{db_conf['database']}"
+        
+        return create_engine(
+            url,
+            pool_size=5,        # Baseline connections to keep open
+            max_overflow=10,    # Allow bursts of traffic
+            pool_pre_ping=True  # Vital for preventing "server closed connection" errors
+        )
+    except Exception as e:
+        st.error(f"❌ Failed to initialize connection pool for {connection_name}: {e}")
+        return None
 
 class DatabaseManager:
-    """Handles all database operations"""
-    
-    def __init__(self, config: dict):
-        self.config = config
-        self._connection = None
-    
-    @st.cache_resource
-    def get_connection(_self):
-        """Create and return PostgreSQL connection"""
+    def __init__(self, connection_name: str):
+        self.connection_name = connection_name
+
+    def _get_engine(self):
+        return get_engine(self.connection_name)
+
+    def fetch_data(self, query: str, params: dict = None) -> pd.DataFrame:
+        """Safe Read: Pandas automatically manages the connection open/close"""
+        engine = self._get_engine()
+        if not engine: return pd.DataFrame()
+        
         try:
-            conn = psycopg2.connect(**_self.config)
-            return conn
+            return pd.read_sql_query(query, engine, params=params)
         except Exception as e:
-            st.error(f"❌ Database connection failed: {e}")
-            return None
-    
-    @st.cache_data(ttl=60)
-    def fetch_data(_self, query: str) -> pd.DataFrame:
-        """Fetch data from database with caching"""
-        conn = _self.get_connection()
-        if conn:
-            try:
-                # Use SQLAlchemy connection string to avoid pandas warning
-                from sqlalchemy import create_engine
-                engine = create_engine(f"postgresql://{_self.config['user']}:{_self.config['password']}@{_self.config['host']}:{_self.config['port']}/{_self.config['database']}")
-                df = pd.read_sql_query(query, engine)
-                return df
-            except Exception as e:
-                st.error(f"❌ Error loading data: {e}")
-                return pd.DataFrame()
-        return pd.DataFrame()
-    
-    def execute_query(self, query: str, params: Optional[tuple] = None) -> Tuple[bool, str]:
-        """Execute INSERT, UPDATE, DELETE queries"""
-        conn = self.get_connection()
-        if conn:
-            try:
-                cursor = conn.cursor()
-                if params:
-                    cursor.execute(query, params)
-                else:
-                    cursor.execute(query)
-                conn.commit()
-                cursor.close()
-                st.cache_data.clear()
-                return True, "✅ Operation successful!"
-            except Exception as e:
-                conn.rollback()
-                return False, f"❌ Error: {e}"
-        return False, "❌ No database connection"
-    
-    def get_table_info(self, table_name: str) -> pd.DataFrame:
-        """Get column information from table"""
-        query = f"""
-            SELECT column_name, data_type 
-            FROM information_schema.columns 
-            WHERE table_name = '{table_name}'
-            ORDER BY ordinal_position
-        """
-        return self.fetch_data(query)
-    
-    def get_all_data(self, table_name: str) -> pd.DataFrame:
-        """Get all records from table"""
-        return self.fetch_data(f"SELECT * FROM {table_name}")
-    
-    def insert_record(self, table_name: str, data: dict) -> Tuple[bool, str]:
-        """Insert new record"""
-        columns = ", ".join(data.keys())
-        placeholders = ", ".join(["%s"] * len(data))
-        query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
-        return self.execute_query(query, tuple(data.values()))
-    
-    def update_record(self, table_name: str, pk_column: str, pk_value, data: dict) -> Tuple[bool, str]:
-        """Update existing record"""
-        set_clause = ", ".join([f"{col} = %s" for col in data.keys()])
-        query = f"UPDATE {table_name} SET {set_clause} WHERE {pk_column} = %s"
-        params = tuple(list(data.values()) + [pk_value])
-        return self.execute_query(query, params)
-    
-    def delete_record(self, table_name: str, pk_column: str, pk_value) -> Tuple[bool, str]:
-        """Delete record"""
-        query = f"DELETE FROM {table_name} WHERE {pk_column} = %s"
-        return self.execute_query(query, (pk_value,))
+            st.error(f"❌ Read Error ({self.connection_name}): {e}")
+            return pd.DataFrame()
+
+    def execute_query(self, query: str, params: dict = None) -> tuple[bool, str]:
+        """Safe Write: Transactional execution"""
+        engine = self._get_engine()
+        if not engine: return False, "No connection"
+
+        try:
+            with engine.begin() as conn: # Automatically commits or rollbacks
+                conn.execute(text(query), params or {})
+            return True, "✅ Success"
+        except Exception as e:
+            return False, f"❌ Write Error: {e}"

@@ -1,80 +1,84 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from database.db_manager import DatabaseManager
 from utils.helpers import apply_custom_css
 import config
+from utils.init_db import get_manager
 
-# 1. Page Configuration
+# Page Configuration
 st.set_page_config(page_title="News Source Monitor", layout="wide")
 apply_custom_css()
 
-# Initialize Database Connection
-if "db_manager" not in st.session_state:
-    st.session_state.db_manager = DatabaseManager(config.DB_CONFIG)
+db = get_manager("dashboard_db")
 
-db_manager = st.session_state.db_manager
+st.markdown('<p class="main-header">News Source Status</p>', unsafe_allow_html=True)
 
-st.markdown('<p class="main-header">📊 News Source Status</p>', unsafe_allow_html=True)
-
-# 2. Data Loading from PostgreSQL
-df = db_manager.get_all_data(config.TABLE_NAME)
+# Data Loading from PostgreSQL
+df = db.fetch_data(f"SELECT * FROM {config.DASHBOARD_TABLE}")
 
 if df.empty:
-    st.warning("⚠️ No data found in the PostgreSQL table.")
+    st.warning("No data found in the PostgreSQL table.")
 else:
-    # --- 1. KPI CARDS ---
-    st.subheader("📌 Overview")
+    # KPI CARDS
+    st.subheader("Overview")
     col1, col2, col3, col4= st.columns(4)
 
     with col1:
-        # Total News Source (webname)
-        total_sources = df['url'].shape[0]
+        # Total News Source
+        total_sources = df['portal_url'].shape[0]
         st.metric("Total News Source", f"{total_sources}")
 
     with col2:
-        # Total Active News Source (is_active is True)
-        total_active = df[df['is_active'] == True].shape[0]
-        st.metric("Total Active News Source", f"{total_active}")
+        # Total Status Success
+        total_success = df[df['status'] == 'SUCCESS'].shape[0]
+        st.metric("Total Success", f"{total_success}")
 
     with col3:
-        # Total Static News Source Page (useselenium is False)
-        total_static = df[df['useselenium'] == False].shape[0]
-        st.metric("Total Static News Source Page", f"{total_static}")
+        # Total Status Failed
+        total_failed = df[df['status'] == 'FAILED'].shape[0]
+        st.metric("Total Failed", f"{total_failed}")
 
     with col4:
-        # Total Dynamic News Source Page (useselenium is True)
-        total_dynamic = df[df['useselenium'] == True].shape[0]
-        st.metric("Total Dynamic News Source Page", f"{total_dynamic}")
+        # Latest Updated
+        if 'updated_at' in df.columns:
+            df['updated_at'] = pd.to_datetime(df['updated_at'])
+            latest_date = df['updated_at'].max()
+        else:
+            latest_date = None
+
+        if pd.notna(latest_date):
+            display_date = latest_date.strftime("%d/%m/%y %H:%M")
+        else:
+            display_date = "N/A"
+        st.metric("Last Updated", display_date)
 
     st.markdown("---")
 
-    # --- 2. FAILED SCRAPER BAR GRAPH ---
-    st.subheader("🚫 Failures by Remark")
+    # FAILED SCRAPER BAR GRAPH
+    st.subheader("Failures by Code")
 
-    # Define the failure statuses based on your requirements
-    failure_types = ['Failed (Page Not Found)', 'Failed (Invalid Selector)']
+    # Define the failure code based on your requirements
+    failure_types = ['NF', 'IS', 'TO', 'DF', 'DB', 'GEN']
     
     # Filter only for failed records
-    failed_df = df[df['remarks'].isin(failure_types)].copy()
+    failed_df = df[df['failure_code'].isin(failure_types)].copy()
 
     if not failed_df.empty:
-        # Group by 'scope' (Category) to get total failure count per category
-        failure_by_cat = failed_df.groupby('remarks').size().reset_index(name='total_failures')
+        failure_by_cat = failed_df.groupby('failure_code').size().reset_index(name='total_failures')
         
         # Create the Bar Chart
         fig = px.bar(
             failure_by_cat, 
-            x='remarks', 
+            x='failure_code', 
             y='total_failures',
-            color='remarks',
-            title="Failures by Remarks",
+            color='failure_code',
+            title="Failures by Failure Code",
             labels={'scope': 'Category', 'total_failures': 'Total Failures'},
             text_auto=True
         )
 
         fig.update_layout(
-            xaxis_title="Category (Remarks)",
+            xaxis_title="Failure Code",
             yaxis_title="Count of Failures",
             showlegend=False,
             template="plotly_white",
@@ -83,16 +87,16 @@ else:
         
         st.plotly_chart(fig, width='stretch')
         
-        # Optional: Breakdown table for the specific types of failures
+        # Breakdown table for the specific types of failures
         with st.expander("🔍 Detailed Failure Breakdown"):
-            breakdown = failed_df.groupby(['remarks']).size().reset_index(name='count')
+            breakdown = failed_df.groupby(['failure_code']).size().reset_index(name='count')
             st.dataframe(breakdown, width='stretch', hide_index=True)
 
-        # --- 3. DATA PREVIEW ---
+        # DATA PREVIEW
         with st.expander("📋 View Failed Records"):
             # Filter for the specific failure types
-            failure_types = ['Failed (Page Not Found)', 'Failed (Invalid Selector)']
-            filtered_df = df[df['remarks'].isin(failure_types)]
+            failure_types = ['NF', 'IS', 'TO', 'DF', 'DB', 'GEN']
+            filtered_df = df[df['failure_code'].isin(failure_types)]
             
             st.dataframe(filtered_df, width='stretch', hide_index=True)
             
