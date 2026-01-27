@@ -9,24 +9,24 @@ import pandas as pd
 st.set_page_config(layout="wide")
 
 # Get database manager from session
-if "db_manager" not in st.session_state:
-    st.session_state.db_manager = DatabaseManager(config.DB_CONFIG)
+if "management_db" not in st.session_state:
+    st.session_state.management_db = DatabaseManager(config.MANAGEMENT_DB_CONFIG)
 
-db_manager = st.session_state.db_manager
+db_manager = st.session_state.management_db
 
-st.markdown('<p class="main-header">🗂️ Data Management</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-header">Data Management</p>', unsafe_allow_html=True)
 
 # Load data
-df = db_manager.get_all_data(config.TABLE_NAME)
+df = db_manager.get_all_data(config.MANAGEMENT_TABLE)
 
 # Tabs for different operations
 tab1, tab2, tab3, tab4 = st.tabs(["👀 View", "➕ Add", "✏️ Edit", "🗑️ Delete"])
 
 with tab1:
-    st.subheader("📋 View All Records")
+    st.subheader("View All Records")
     
     if df.empty:
-        st.warning("⚠️ No data available")
+        st.warning("No data available")
     else:
         # Search and filter
         col1, col2 = st.columns([2, 1])
@@ -49,12 +49,12 @@ with tab1:
 with tab2:
     st.subheader("➕ Add New Record")
     
-    schema_df = db_manager.get_table_info(config.TABLE_NAME)
+    schema_df = db_manager.get_table_info(config.MANAGEMENT_TABLE)
     # Fetch sample data for placeholders
-    sample_df = db_manager.get_all_data(config.TABLE_NAME).head(1)
+    sample_df = db_manager.get_all_data(config.MANAGEMENT_TABLE).head(1)
     
     if schema_df.empty:
-        st.error(f"❌ Table '{config.TABLE_NAME}' not found.")
+        st.error(f"❌ Table '{config.MANAGEMENT_TABLE}' not found.")
     else:
         form_fields = schema_df[~schema_df['column_name'].str.lower().isin(['id'])]
         
@@ -96,7 +96,7 @@ with tab2:
             submit_btn = st.form_submit_button("💾 Save Record", width="stretch")
             
             if submit_btn:
-                success, message = db_manager.insert_record(config.TABLE_NAME, new_record_data)
+                success, message = db_manager.insert_record(config.MANAGEMENT_TABLE, new_record_data)
                 if success:
                     st.success(message)
                     st.rerun() 
