@@ -35,7 +35,7 @@ else:
 
     with col3:
         # Total Status Failed
-        total_failed = df[df['status'] == 'FAILED'].shape[0]
+        total_failed = df[df['status'] != 'FAILED'].shape[0]
         st.metric("Total Failed", f"{total_failed}")
 
     with col4:
@@ -72,7 +72,7 @@ else:
             x='failure_code', 
             y='total_failures',
             color='failure_code',
-            title="Failures by Failure Code",
+            title="Failures by Code",
             labels={'scope': 'Category', 'total_failures': 'Total Failures'},
             text_auto=True
         )
