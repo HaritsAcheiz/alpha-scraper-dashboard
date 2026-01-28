@@ -58,7 +58,7 @@ else:
     st.subheader("Failures by Code")
 
     # Define the failure code based on your requirements
-    failure_types = ['NF', 'IS', 'TO', 'DF', 'DB', 'GEN']
+    failure_types = ['PNF', 'ANF', 'IS']
     
     # Filter only for failed records
     failed_df = df[df['failure_code'].isin(failure_types)].copy()
@@ -95,7 +95,7 @@ else:
         # DATA PREVIEW
         with st.expander("📋 View Failed Records"):
             # Filter for the specific failure types
-            failure_types = ['NF', 'IS', 'TO', 'DF', 'DB', 'GEN']
+            failure_types = ['PNF', 'ANF', 'IS']
             filtered_df = df[df['failure_code'].isin(failure_types)]
             
             st.dataframe(filtered_df, width='stretch', hide_index=True)
