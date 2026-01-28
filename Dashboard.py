@@ -35,7 +35,7 @@ else:
 
     with col3:
         # Total Status Failed
-        total_failed = df[df['status'] != 'FAILED'].shape[0]
+        total_failed = df[df['status'] == 'FAILED'].shape[0]
         st.metric("Total Failed", f"{total_failed}")
 
     with col4:
@@ -58,7 +58,7 @@ else:
     st.subheader("Failures by Code")
 
     # Define the failure code based on your requirements
-    failure_types = ['PNF', 'ANF', 'IS']
+    failure_types = ['NO_PORTAL', 'NO_ARTICLE', 'BAD_SEL']
     
     # Filter only for failed records
     failed_df = df[df['failure_code'].isin(failure_types)].copy()
@@ -92,13 +92,30 @@ else:
             breakdown = failed_df.groupby(['failure_code']).size().reset_index(name='count')
             st.dataframe(breakdown, width='stretch', hide_index=True)
 
-        # DATA PREVIEW
-        with st.expander("📋 View Failed Records"):
-            # Filter for the specific failure types
-            failure_types = ['PNF', 'ANF', 'IS']
+        # # DATA PREVIEW
+        # with st.expander("📋 View Failed Records"):
+        #     # Filter for the specific failure types
+        #     failure_types = ['NO_PORTAL', 'NO_ARTICLE', 'BAD_SEL']
+        #     filtered_df = df[df['failure_code'].isin(failure_types)]
+            
+        #     st.dataframe(filtered_df, width='stretch', hide_index=True)
+            
+        with st.expander("📋 Data Preview with JSON Support"):
+            failure_types = ['NO_PORTAL', 'NO_ARTICLE', 'BAD_SEL']
             filtered_df = df[df['failure_code'].isin(failure_types)]
-            
-            st.dataframe(filtered_df, width='stretch', hide_index=True)
-            
+
+            st.data_editor(
+                filtered_df,
+                column_config={
+                    "remarks": st.column_config.JsonColumn(
+                        "Remarks",
+                        help="Detailed error logs in JSON format",
+                    ),
+                    "url": st.column_config.LinkColumn("Source URL"),
+                },
+                hide_index=True,
+                width='stretch'
+            )
+
     else:
         st.success("✅ No failures detected. All scrapers are returning 'Success'.")
