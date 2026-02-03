@@ -1,0 +1,9 @@
+services:
+  alpha-scraper-dashboard:
+    build: .
+    container_name: alpha-scraper-dashboard
+    volumes:
+      - ./app:/app
+    ports:
+      - "8501:8501"
+    restart: always
