@@ -4,6 +4,8 @@ uv init
 uv venv
 uv add -r requirements.txt
 
-copy config.py to root path
+copy config.py to app/ folder
+
+copy secrets.toml to .streamlit/ folder
 
 uv run streamlit run Dashboard.py
