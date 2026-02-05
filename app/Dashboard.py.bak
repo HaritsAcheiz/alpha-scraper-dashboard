@@ -4,10 +4,14 @@ import plotly.express as px
 from utils.helpers import apply_custom_css
 import config
 from utils.init_db import get_manager
+from utils.auth import check_password, logout_button
 
 # Page Configuration
 st.set_page_config(page_title="News Source Monitor", layout="wide")
 apply_custom_css()
+
+if not check_password():
+    st.stop()
 
 db = get_manager("dashboard_db")
 
