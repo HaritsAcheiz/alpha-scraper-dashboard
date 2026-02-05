@@ -1,13 +1,14 @@
-"""
-Data Management Page
-"""
 import streamlit as st
 import pandas as pd
 import config
 from utils.init_db import get_manager
+from utils.auth import require_login, sidebar_logout
 
 # Page Configuration
 st.set_page_config(layout="wide", page_title="Data Management")
+
+authenticator = require_login()
+sidebar_logout(authenticator)
 
 # Database Connection (Safe & Persistent)
 try:
