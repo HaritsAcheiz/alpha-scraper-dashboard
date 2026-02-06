@@ -96,27 +96,22 @@ else:
         with st.expander("🔍 Detailed Failure Breakdown"):
             breakdown = failed_df.groupby(['failure_code']).size().reset_index(name='count')
             st.dataframe(breakdown, width='stretch', hide_index=True)
-
-        # # DATA PREVIEW
-        # with st.expander("📋 View Failed Records"):
-        #     # Filter for the specific failure types
-        #     failure_types = ['NO_PORTAL', 'NO_ARTICLE', 'BAD_SEL']
-        #     filtered_df = df[df['failure_code'].isin(failure_types)]
             
-        #     st.dataframe(filtered_df, width='stretch', hide_index=True)
-            
-        with st.expander("📋 Data Preview with JSON Support"):
+        with st.expander("📋 Data Preview"):
             failure_types = ['NO_PORTAL', 'NO_ARTICLE', 'BAD_SEL']
             filtered_df = df[df['failure_code'].isin(failure_types)]
 
             st.data_editor(
                 filtered_df,
                 column_config={
-                    "remarks": st.column_config.JsonColumn(
-                        "Remarks",
+                    "article_errors": st.column_config.JsonColumn(
+                        "Error Details",
                         help="Detailed error logs in JSON format",
                     ),
-                    "url": st.column_config.LinkColumn("Source URL"),
+                    "portal_url": st.column_config.LinkColumn(
+                        "Source URL",
+                        display_text="Open Link"
+                    ),
                 },
                 hide_index=True,
                 width='stretch'
