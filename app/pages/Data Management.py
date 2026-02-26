@@ -141,18 +141,97 @@ with tab2:
                 else:
                     st.error(message)
 
-# TAB 3: EDIT RECORD
+To build the Edit feature, we need to accomplish three main things:
+
+Allow the user to select an existing record.
+
+Generate a form that is pre-filled with that record's current data.
+
+Execute an UPDATE SQL statement using parameterized queries.
+
+Here is the complete code to replace your current # --- TAB 3: EDIT RECORD --- block in Data Management.py.
+
+The Code for Tab 3
+Replace your existing with tab3: block with this:
+
+Python
+# --- TAB 3: EDIT RECORD ---
 with tab3:
     st.subheader("✏️ Edit Existing Record")
-    st.info("Select a record ID to edit.")
     
-    # Simple ID selector for editing
-    if not df.empty and 'id' in df.columns:
-        record_id = st.selectbox("Select Record ID to Edit", df['id'].tolist())
-        st.write(f"Editing functionality for ID {record_id} can be implemented here.")
-        # Implementation would follow similar pattern to Add, but with UPDATE query
+    if df.empty or 'id' not in df.columns:
+        st.warning("No records available to edit, or table lacks an 'id' column.")
     else:
-        st.write("No records available to edit.")
+        # 1. Select the record to edit
+        # We format the dropdown to show the ID and maybe a helpful second column (like URL or Name) if it exists
+        display_col = df.columns[1] if len(df.columns) > 1 else 'id'
+        
+        # Create a dictionary mapping a friendly string to the actual ID
+        record_options = {f"ID: {row['id']} - {row[display_col]}": row['id'] for _, row in df.iterrows()}
+        
+        selected_label = st.selectbox("Select Record to Edit", list(record_options.keys()), key="edit_select")
+        record_id = record_options[selected_label]
+        
+        # 2. Get the current data for the selected record
+        current_record = df[df['id'] == record_id].iloc[0]
+        
+        # We reuse the `form_fields` generated in Tab 2 (which safely excludes the 'id' column)
+        with st.form("edit_record_form"):
+            update_data = {}
+            ui_cols = st.columns(2)
+            
+            for idx, row in form_fields.reset_index().iterrows():
+                col_name = row['column_name']
+                data_type = row['data_type'].lower()
+                
+                # Fetch the existing value from the dataframe
+                current_val = current_record[col_name]
+                is_val_null = pd.isna(current_val)
+                
+                with ui_cols[idx % 2]:
+                    # IMPORTANT: We add key=f"edit_{col_name}" to prevent Streamlit duplicate widget errors
+                    
+                    if 'int' in data_type:
+                        val = int(current_val) if not is_val_null else 0
+                        update_data[col_name] = st.number_input(f"{col_name}", step=1, value=val, key=f"edit_{col_name}")
+                        
+                    elif any(t in data_type for t in ['numeric', 'decimal', 'real', 'double', 'float']):
+                        val = float(current_val) if not is_val_null else 0.0
+                        update_data[col_name] = st.number_input(f"{col_name}", step=0.01, format="%.2f", value=val, key=f"edit_{col_name}")
+                        
+                    elif 'date' in data_type or 'timestamp' in data_type:
+                        # Convert pandas timestamp to standard Python date for the Streamlit widget
+                        val = pd.to_datetime(current_val).date() if not is_val_null else None
+                        update_data[col_name] = st.date_input(f"{col_name}", value=val, key=f"edit_{col_name}")
+                        
+                    elif 'bool' in data_type:
+                        val = bool(current_val) if not is_val_null else False
+                        update_data[col_name] = st.checkbox(f"{col_name}", value=val, key=f"edit_{col_name}")
+                        
+                    else:
+                        val = str(current_val) if not is_val_null else ""
+                        update_data[col_name] = st.text_input(f"{col_name}", value=val, key=f"edit_{col_name}")
+
+            submit_edit = st.form_submit_button("💾 Save Changes", use_container_width=True)
+            
+            if submit_edit:
+                # 3. Dynamic SQL UPDATE Generation
+                # Creates a string like: "url = :url, source_name = :source_name, is_active = :is_active"
+                set_clause = ", ".join([f"{col} = :{col}" for col in update_data.keys()])
+                
+                update_query = f"UPDATE {config.MANAGEMENT_TABLE} SET {set_clause} WHERE id = :id"
+                
+                # Add the ID to our dictionary so the parameterized query can inject it into the WHERE clause
+                update_data['id'] = record_id
+                
+                # Execute the safe query
+                success, message = db.execute_query(update_query, update_data)
+                
+                if success:
+                    st.success(f"✅ Record ID {record_id} updated successfully!")
+                    st.rerun()
+                else:
+                    st.error(message)
 
 # TAB 4: DELETE RECORD
 with tab4:
