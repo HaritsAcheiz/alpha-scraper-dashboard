@@ -21,9 +21,28 @@ except Exception as e:
 
 st.markdown('<p class="main-header">Data Management</p>', unsafe_allow_html=True)
 
-# Load Data
+# # Load Data
+# try:
+#     df = db.fetch_data(f"SELECT * FROM {config.MANAGEMENT_TABLE}")
+# except Exception as e:
+#     st.error(f"Error loading table: {e}")
+#     df = pd.DataFrame()
+
+# 1. TABLE SELECTOR (Reading from config.py)
+# Get the clean display names for the dropdown
+table_options = list(config.MANAGEMENT_TABLES.keys())
+
+selected_label = st.selectbox("📂 Select Table to Manage:", table_options)
+
+# Look up the actual database table name based on what the user picked
+selected_table = config.MANAGEMENT_TABLES[selected_label]
+
+st.markdown("---")
+
+# 2. LOAD DATA DYNAMICALLY
 try:
-    df = db.fetch_data(f"SELECT * FROM {config.MANAGEMENT_TABLE}")
+    # Uses the underlying DB name (e.g., 'from_news.news_source_new')
+    df = db.fetch_data(f"SELECT * FROM {selected_table}")
 except Exception as e:
     st.error(f"Error loading table: {e}")
     df = pd.DataFrame()
@@ -60,10 +79,16 @@ with tab1:
 with tab2:
     st.subheader("➕ Add New Record")
     
-    if "." in config.MANAGEMENT_TABLE:
-        schema_name, table_name = config.MANAGEMENT_TABLE.split(".", 1)
+    # if "." in config.MANAGEMENT_TABLE:
+    #     schema_name, table_name = config.MANAGEMENT_TABLE.split(".", 1)
+    # else:
+    #     schema_name, table_name = 'public', config.MANAGEMENT_TABLE
+
+    # Update schema split
+    if "." in selected_table:
+        schema_name, table_name = selected_table.split(".", 1)
     else:
-        schema_name, table_name = 'public', config.MANAGEMENT_TABLE
+        schema_name, table_name = 'public', selected_table
 
     schema_query = f"""
         SELECT column_name, data_type 
@@ -125,7 +150,8 @@ with tab2:
                 # Dynamic SQL Generation (now automatically includes created_at!)
                 columns_str = ", ".join(new_record_data.keys())
                 placeholders_str = ", ".join([f":{col}" for col in new_record_data.keys()])
-                insert_query = f"INSERT INTO {config.MANAGEMENT_TABLE} ({columns_str}) VALUES ({placeholders_str})"
+                # insert_query = f"INSERT INTO {config.MANAGEMENT_TABLE} ({columns_str}) VALUES ({placeholders_str})"
+                insert_query = f"INSERT INTO {selected_table} ({columns_str}) VALUES ({placeholders_str})"
                 
                 success, message = db.execute_query(insert_query, new_record_data)
                 
@@ -168,7 +194,10 @@ with tab3:
                 st.success(f"Editing Record ID: {record_id}")
                 
                 # Fetch schema safely
-                schema_name, table_name = config.MANAGEMENT_TABLE.split(".", 1) if "." in config.MANAGEMENT_TABLE else ('public', config.MANAGEMENT_TABLE)
+                # schema_name, table_name = config.MANAGEMENT_TABLE.split(".", 1) if "." in config.MANAGEMENT_TABLE else ('public', config.MANAGEMENT_TABLE)
+                # schema_df = db.fetch_data(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = '{schema_name}' AND table_name = '{table_name}'")
+                # Update schema split
+                schema_name, table_name = selected_table.split(".", 1) if "." in selected_table else ('public', selected_table)
                 schema_df = db.fetch_data(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = '{schema_name}' AND table_name = '{table_name}'")
                 exclude_cols = ['id', 'created_at', 'last_updated_at']
                 form_fields = schema_df[~schema_df['column_name'].str.lower().isin(exclude_cols)]
@@ -211,7 +240,10 @@ with tab3:
                                 update_data[key] = None
 
                         set_clause = ", ".join([f"{col} = :{col}" for col in update_data.keys()])
-                        update_query = f"UPDATE {config.MANAGEMENT_TABLE} SET {set_clause} WHERE id = :id"
+                        # update_query = f"UPDATE {config.MANAGEMENT_TABLE} SET {set_clause} WHERE id = :id"
+                        # Update SQL Query
+                        update_query = f"UPDATE {selected_table} SET {set_clause} WHERE id = :id"
+
                         update_data['id'] = record_id
                         
                         success, message = db.execute_query(update_query, update_data)
@@ -258,8 +290,10 @@ with tab4:
                 
                 st.error(f"⚠️ Are you sure you want to delete **ID {record_id} ({display_val})**?")
                 
+                # if st.button("🗑️ Confirm Delete", type="primary", use_container_width=True):
+                #     delete_query = f"DELETE FROM {config.MANAGEMENT_TABLE} WHERE id = :id"
                 if st.button("🗑️ Confirm Delete", type="primary", use_container_width=True):
-                    delete_query = f"DELETE FROM {config.MANAGEMENT_TABLE} WHERE id = :id"
+                    delete_query = f"DELETE FROM {selected_table} WHERE id = :id"
                     success, message = db.execute_query(delete_query, {"id": record_id})
                     
                     if success:
