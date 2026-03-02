@@ -109,8 +109,8 @@ else:
                         help="Detailed error logs in JSON format",
                     ),
                     "portal_url": st.column_config.LinkColumn(
-                        "Source URL",
-                        display_text="Open Link"
+                        "Source URL"
+                        # display_text="Open Link"
                     ),
                 },
                 hide_index=True,
