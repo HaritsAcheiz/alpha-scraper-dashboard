@@ -60,3 +60,4 @@ def create_download_button(df, table_name):
         mime="text/csv",
         width='stretch'
     )
+    

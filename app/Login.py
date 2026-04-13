@@ -22,7 +22,7 @@ if st.session_state.get('authentication_status'):
 
     time.sleep(0.5)
     # Success!
-    st.switch_page("pages/Dashboard.py")
+    st.switch_page("pages/Dashboard_News.py")
 
 elif st.session_state.get('authentication_status') is False:
     st.error('Username/password is incorrect')
