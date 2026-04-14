@@ -8,3 +8,4 @@ secrets.toml
 config.yaml
 hasher.py
 *.sql
+*.env
