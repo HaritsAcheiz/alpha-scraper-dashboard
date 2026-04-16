@@ -23,11 +23,11 @@ db = get_manager("dashboard_db")
 
 # Platform information
 PLATFORMS = {
-    "Facebook": {"emoji": "👤", "api": "APIFY", "color": "#1877F2"},
-    "Twitter": {"emoji": "𝕏", "api": "X API", "color": "#000000"},
-    "Instagram": {"emoji": "📷", "api": "APIFY", "color": "#E4405F"},
-    "TikTok": {"emoji": "🎵", "api": "TIKAPI", "color": "#25F4EE"},
-    "YouTube": {"emoji": "▶️", "api": "YOUTUBE API", "color": "#FF0000"}
+    "Facebook": {"emoji": "👤", "api": "APIFY", "color": "#5C9BFF"},  # Lighter, softer blue for contrast
+    "Twitter": {"emoji": "𝕏", "api": "X API", "color": "#E7E9EA"},  # X's official dark mode off-white
+    "Instagram": {"emoji": "📷", "api": "APIFY", "color": "#FF6384"},  # Brighter, softer pink to pop on dark grays
+    "TikTok": {"emoji": "🎵", "api": "TIKAPI", "color": "#66FFF9"},  # Softened cyan to prevent neon blooming
+    "YouTube": {"emoji": "▶️", "api": "YOUTUBE API", "color": "#FF6B6B"}   # Lighter red to prevent eye strain on black
 }
 
 # Get date range (last 30 days)
