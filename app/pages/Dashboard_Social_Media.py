@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
 from utils.helpers import apply_custom_css
+from utils.scraper_credits import get_all_platform_credits, get_credit_status_message, log_credit_check
 import config
 from utils.init_db import get_manager
 from utils.auth import require_login, sidebar_logout
@@ -22,11 +23,11 @@ db = get_manager("dashboard_db")
 
 # Platform information
 PLATFORMS = {
-    "Facebook": {"emoji": "👤", "api": "APIFY", "color": "#1877F2"},
-    "Twitter": {"emoji": "𝕏", "api": "X API", "color": "#000000"},
-    "Instagram": {"emoji": "📷", "api": "APIFY", "color": "#E4405F"},
-    "TikTok": {"emoji": "🎵", "api": "TIKAPI", "color": "#25F4EE"},
-    "YouTube": {"emoji": "▶️", "api": "YOUTUBE API", "color": "#FF0000"}
+    "Facebook": {"emoji": "👤", "api": "APIFY", "color": "#5C9BFF"},  # Lighter, softer blue for contrast
+    "Twitter": {"emoji": "𝕏", "api": "X API", "color": "#E7E9EA"},  # X's official dark mode off-white
+    "Instagram": {"emoji": "📷", "api": "APIFY", "color": "#FF6384"},  # Brighter, softer pink to pop on dark grays
+    "TikTok": {"emoji": "🎵", "api": "TIKAPI", "color": "#66FFF9"},  # Softened cyan to prevent neon blooming
+    "YouTube": {"emoji": "▶️", "api": "YOUTUBE API", "color": "#FF6B6B"}   # Lighter red to prevent eye strain on black
 }
 
 # Get date range (last 30 days)
@@ -102,23 +103,52 @@ with tab1:
     # KPI Section
     st.subheader("Key Performance Indicators (1 Month)")
     kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
-    
+
     total_scraped = int(platform_data['Total Scraped'].sum())
     total_filtered = int(platform_data['Filtered & Stored'].sum())
     filter_rate = (total_filtered / total_scraped * 100) if total_scraped > 0 else 0
-    
+
+    # Calculate previous 30-day period
+    prev_end_date = start_date
+    prev_start_date = prev_end_date - timedelta(days=30)
+    prev_query = f"""
+        SELECT 
+            SUM(scraped_count) as total_scraped,
+            SUM(filtered_count) as total_filtered
+        FROM {config.SOCIAL_MEDIA_MONITORING_TABLE}
+        WHERE mention_datetime BETWEEN '{prev_start_date}' AND '{prev_end_date}'
+    """
+    try:
+        prev_df = db.fetch_data(prev_query)
+        prev_total_scraped = int(prev_df['total_scraped'].iloc[0]) if not prev_df.empty and prev_df['total_scraped'].iloc[0] is not None else 0
+        prev_total_filtered = int(prev_df['total_filtered'].iloc[0]) if not prev_df.empty and prev_df['total_filtered'].iloc[0] is not None else 0
+        prev_filter_rate = (prev_total_filtered / prev_total_scraped * 100) if prev_total_scraped > 0 else 0
+    except Exception:
+        prev_total_scraped = prev_total_filtered = prev_filter_rate = 0
+
+    # Calculate percentage changes
+    def pct_change(current, previous):
+        if previous == 0:
+            return "N/A" if current == 0 else "+100%"
+        change = ((current - previous) / previous) * 100
+        return f"{change:+.1f}%"
+
+    scraped_change = pct_change(total_scraped, prev_total_scraped)
+    filtered_change = pct_change(total_filtered, prev_total_filtered)
+    filter_rate_change = pct_change(filter_rate, prev_filter_rate)
+
     with kpi_col1:
-        st.metric("Total Content Scraped", f"{total_scraped:,}", "+12.5%")
-    
+        st.metric("Total Content Scraped", f"{total_scraped:,}", scraped_change)
+
     with kpi_col2:
-        st.metric("Content Filtered & Stored", f"{total_filtered:,}", "+8.3%")
-    
+        st.metric("Content Filtered & Stored", f"{total_filtered:,}", filtered_change)
+
     with kpi_col3:
-        st.metric("Filter Efficiency", f"{filter_rate:.1f}%", "+2.1%")
-    
+        st.metric("Filter Efficiency", f"{filter_rate:.1f}%", filter_rate_change)
+
     with kpi_col4:
         st.metric("Active Platforms", "5/5", "✅")
-    
+
     st.markdown("---")
     
     # Content Breakdown by Platform
@@ -185,7 +215,7 @@ with tab2:
     else:
         # Create trend data from actual database
         trend_query = f"""
-            SELECT mention_date as Date, platform, SUM(scraped_count) as count
+            SELECT mention_date, platform, SUM(filtered_count) as count
             FROM {config.SOCIAL_MEDIA_MONITORING_TABLE}
             WHERE mention_datetime BETWEEN '{start_date}' AND '{end_date}'
             GROUP BY mention_date, platform
@@ -193,9 +223,19 @@ with tab2:
         """
         try:
             trend_df = db.fetch_data(trend_query)
+            # Rename columns to ensure consistency
+            trend_df.columns = [col.lower() for col in trend_df.columns]
+            
             # Pivot the data for visualization
-            trend_data = trend_df.pivot(index='Date', columns='platform', values='count').reset_index()
-            trend_data = trend_data.fillna(0)
+            if 'mention_date' in trend_df.columns:
+                trend_df['mention_date'] = pd.to_datetime(trend_df['mention_date'])
+                trend_data = trend_df.pivot_table(index='mention_date', columns='platform', values='count', aggfunc='sum').reset_index()
+                trend_data.columns.name = None
+                trend_data.rename(columns={'mention_date': 'Date'}, inplace=True)
+                trend_data = trend_data.fillna(0)
+            else:
+                st.error("Error: 'mention_date' column not found in database response")
+                trend_data = None
         except Exception as e:
             st.error(f"Error fetching trend data: {str(e)}")
             trend_data = None
@@ -253,41 +293,33 @@ with tab2:
 
 with tab3:
     st.subheader("Scraper Credits & Limits")
-    st.info("ℹ️ API credits and limits are fetched directly from each platform's API. Refresh to get the latest information.")
+    st.info("ℹ️ API credits and limits are fetched in real-time from each platform's API. Last refreshed automatically every 5 minutes.")
     
     st.markdown("### API Credits & Limits")
     
-    # Scraper Credits Table (to be populated from API calls)
-    scraper_credits = pd.DataFrame({
-        "Platform": list(PLATFORMS.keys()),
-        "API": [PLATFORMS[p]["api"] for p in PLATFORMS.keys()],
-        "Daily Limit": [1000, 500, 800, 2000, 100],
-        "Used Today": [456, 287, 412, 1240, 58],
-        "Remaining": [544, 213, 388, 760, 42],
-        "Usage %": [45.6, 57.4, 51.5, 62.0, 58.0]
-    })
+    # Fetch real-time credits from all platforms
+    scraper_credits = get_all_platform_credits()
+    
+    # Log the credit check
+    log_credit_check()
     
     credit_cols = st.columns(5)
     for idx, platform in enumerate(PLATFORMS.keys()):
-        row_data = scraper_credits[scraper_credits["Platform"] == platform].iloc[0]
+        platform_row = scraper_credits[scraper_credits["Platform"] == platform].iloc[0]
         with credit_cols[idx]:
-            usage_pct = row_data["Usage %"]
-            if usage_pct > 75:
-                color = "#FF6B6B"
-            elif usage_pct > 50:
-                color = "#FFA500"
-            else:
-                color = "#51CF66"
+            usage_pct = platform_row["Usage %"]
+            status_text, color = get_credit_status_message(usage_pct)
             
             st.markdown(f"""
                 <div style="background: linear-gradient(135deg, {PLATFORMS[platform]['color']}20 0%, {PLATFORMS[platform]['color']}10 100%); 
-                            padding: 15px; border-radius: 8px; text-align: center;">
+                            padding: 15px; border-radius: 8px; text-align: center; border: 2px solid {color};">
                     <h4>{PLATFORMS[platform]['emoji']} {platform}</h4>
-                    <p style="font-size: 14px; margin: 10px 0;">Limit: {row_data['Daily Limit']}</p>
+                    <p style="font-size: 14px; margin: 10px 0;">Limit: {platform_row['Daily Limit']}</p>
                     <div style="background: #e0e0e0; border-radius: 10px; height: 8px; margin: 10px 0; overflow: hidden;">
                         <div style="background: {color}; width: {usage_pct}%; height: 100%;"></div>
                     </div>
-                    <p style="font-size: 12px; color: #666; margin: 5px 0;">{row_data['Used Today']}/{row_data['Daily Limit']} ({usage_pct:.1f}%)</p>
+                    <p style="font-size: 12px; color: {color}; margin: 5px 0; font-weight: bold;">{status_text}</p>
+                    <p style="font-size: 12px; color: #666; margin: 5px 0;">{platform_row['Used Today']}/{platform_row['Daily Limit']} ({usage_pct:.1f}%)</p>
                 </div>
             """, unsafe_allow_html=True)
     
@@ -295,7 +327,22 @@ with tab3:
     
     # Credits detail table
     with st.expander("📋 Detailed Credits Information"):
-        st.dataframe(scraper_credits, use_container_width=True, hide_index=True)
+        # Display the full dataframe with better formatting
+        display_df = scraper_credits[["Platform", "API", "Daily Limit", "Used Today", "Remaining", "Usage %", "Status"]].copy()
+        
+        # Color code the Usage % column
+        def format_usage(val):
+            if val >= 90:
+                return f"🔴 {val:.1f}%"
+            elif val >= 75:
+                return f"🟠 {val:.1f}%"
+            elif val >= 50:
+                return f"🟡 {val:.1f}%"
+            else:
+                return f"🟢 {val:.1f}%"
+        
+        display_df["Usage %"] = display_df["Usage %"].apply(format_usage)
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
     
     st.markdown("---")
     
